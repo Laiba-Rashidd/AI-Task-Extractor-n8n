@@ -1,0 +1,27 @@
+name: Basic Project Validation
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate-project:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check required files
+        run: |
+          test -f README.md
+          test -f .env.example
+          test -f workflow/task-extractor-workflow.json
+          test -f data/sample_inputs/test_inputs.json
+          test -f data/sample_outputs/sample_output.json
+
+      - name: Validate JSON files
+        run: |
+          python -m json.tool workflow/task-extractor-workflow.json
+          python -m json.tool data/sample_inputs/test_inputs.json
+          python -m json.tool data/sample_outputs/sample_output.json

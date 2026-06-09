@@ -1,0 +1,160 @@
+{
+  "name": "AI Task Extraction Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "task_extractor",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        48,
+        64
+      ],
+      "id": "f8fee8db-74f9-4e4a-859c-61c3aec5205d",
+      "name": "Webhook",
+      "webhookId": "d48225b1-acba-437d-87d3-fa6ec3bef886"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputText = $input.first().json.body?.text || \"\";\n\nconst tasks = [];\n\nconst sentences = inputText\n  .split(/[.!?]/)\n  .map(s => s.trim())\n  .filter(Boolean);\n\nfunction detectPriority(sentence) {\n  const text = sentence.toLowerCase();\n\n  if (\n    text.includes(\"urgent\") ||\n    text.includes(\"asap\") ||\n    text.includes(\"important\") ||\n    text.includes(\"high priority\")\n  ) {\n    return \"High\";\n  }\n\n  if (\n    text.includes(\"low priority\") ||\n    text.includes(\"whenever\") ||\n    text.includes(\"not urgent\")\n  ) {\n    return \"Low\";\n  }\n\n  return \"Medium\";\n}\n\nfunction detectDeadline(sentence) {\n  const text = sentence.toLowerCase();\n\n  if (text.includes(\"today\")) return \"Today\";\n  if (text.includes(\"tomorrow\")) return \"Tomorrow\";\n  if (text.includes(\"next week\")) return \"Next week\";\n\n  const days = [\n    \"monday\",\n    \"tuesday\",\n    \"wednesday\",\n    \"thursday\",\n    \"friday\",\n    \"saturday\",\n    \"sunday\"\n  ];\n\n  for (const day of days) {\n    if (text.includes(day)) {\n      return day.charAt(0).toUpperCase() + day.slice(1);\n    }\n  }\n\n  const byMatch = sentence.match(/\\bby\\s+([A-Za-z0-9\\s]+)/i);\n  if (byMatch) return byMatch[1].trim();\n\n  const beforeMatch = sentence.match(/\\bbefore\\s+([A-Za-z0-9\\s]+)/i);\n  if (beforeMatch) return beforeMatch[1].trim();\n\n  return \"Not specified\";\n}\n\nfunction cleanTask(task) {\n  return task\n    .replace(/\\bby today\\b/gi, \"\")\n    .replace(/\\btoday\\b/gi, \"\")\n    .replace(/\\bby tomorrow\\b/gi, \"\")\n    .replace(/\\btomorrow\\b/gi, \"\")\n    .replace(/\\bby monday\\b/gi, \"\")\n    .replace(/\\bby tuesday\\b/gi, \"\")\n    .replace(/\\bby wednesday\\b/gi, \"\")\n    .replace(/\\bby thursday\\b/gi, \"\")\n    .replace(/\\bby friday\\b/gi, \"\")\n    .replace(/\\bby saturday\\b/gi, \"\")\n    .replace(/\\bby sunday\\b/gi, \"\")\n    .replace(/\\bbefore monday\\b/gi, \"\")\n    .replace(/\\bbefore tuesday\\b/gi, \"\")\n    .replace(/\\bbefore wednesday\\b/gi, \"\")\n    .replace(/\\bbefore thursday\\b/gi, \"\")\n    .replace(/\\bbefore friday\\b/gi, \"\")\n    .replace(/\\bbefore saturday\\b/gi, \"\")\n    .replace(/\\bbefore sunday\\b/gi, \"\")\n    .replace(/\\bnext week\\b/gi, \"\")\n    .replace(/\\burgent\\b/gi, \"\")\n    .replace(/\\basap\\b/gi, \"\")\n    .replace(/\\bimportant\\b/gi, \"\")\n    .replace(/\\bhigh priority\\b/gi, \"\")\n    .replace(/\\blow priority\\b/gi, \"\")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\nfunction isOnlyPrioritySentence(sentence) {\n  const text = sentence.toLowerCase().trim();\n\n  return (\n    text === \"it is urgent\" ||\n    text === \"this is urgent\" ||\n    text === \"urgent\" ||\n    text === \"it is important\" ||\n    text === \"this is important\" ||\n    text === \"high priority\" ||\n    text === \"this is high priority\" ||\n    text === \"asap\"\n  );\n}\n\nfor (const sentence of sentences) {\n  // If sentence only tells priority, apply it to previous task\n  if (isOnlyPrioritySentence(sentence)) {\n    if (tasks.length > 0) {\n      tasks[tasks.length - 1].priority = detectPriority(sentence);\n    }\n    continue;\n  }\n\n  let owner = \"Unassigned\";\n  let task = sentence;\n\n  // Pattern: Sara needs to send...\n  let match = sentence.match(/^([A-Z][a-z]+)\\s+(needs to|should|must|has to|will|was asked to)\\s+(.+)/i);\n\n  if (match) {\n    owner = match[1];\n    task = match[3];\n  }\n\n  // Pattern: assign Sara to send...\n  let assignMatch = sentence.match(/assign\\s+([A-Z][a-z]+)\\s+to\\s+(.+)/i);\n\n  if (assignMatch) {\n    owner = assignMatch[1];\n    task = assignMatch[2];\n  }\n\n  const cleanedTask = cleanTask(task);\n\n  // Avoid adding empty/useless task\n  if (!cleanedTask || cleanedTask.length < 3) {\n    continue;\n  }\n\n  tasks.push({\n    task: cleanedTask,\n    owner,\n    deadline: detectDeadline(sentence),\n    priority: detectPriority(sentence)\n  });\n}\n\nreturn [\n  {\n    json: {\n      success: true,\n      tasks\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        64
+      ],
+      "id": "0f13f7bf-9abe-4ebe-b172-c23b4f98a778",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1088,
+        64
+      ],
+      "id": "6efff5bf-feaf-4d4e-878f-a71fb5e10853",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "operation": "toJson",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        464,
+        64
+      ],
+      "id": "29999973-2aa5-406b-bcc5-871a93d859cd",
+      "name": "Convert to File"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "C:\\AIworkflowN8N\\data\\local_storage\\tasks-output.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        672,
+        64
+      ],
+      "id": "21bcf328-830f-4664-af64-3f17f4db38b5",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "jsCode": "const originalOutput = $items(\"Code\")[0].json;\n\nreturn [\n  {\n    json: originalOutput\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        64
+      ],
+      "id": "476ba333-4925-43c0-a4fc-a77441ce8599",
+      "name": "prepare response"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "prepare response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prepare response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c999408f-7c8a-4b2d-8e3e-cfe2ab4ef246",
+  "meta": {
+    "instanceId": "628ea95b19925857dc4a06dcfb8160fd3bfdad706c410dd214ac6395810a22ba"
+  },
+  "id": "c0siUsOg3FwZResB",
+  "tags": []
+}
